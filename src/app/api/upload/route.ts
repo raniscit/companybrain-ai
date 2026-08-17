@@ -49,8 +49,6 @@ export async function POST(request: Request) {
 
     const totalPages = info.total;
 
-    console.log("Total pages:", totalPages);
-    console.log("Document ID:", document.id);
 
     let totalChunks = 0;
     let idx = 0;
@@ -65,9 +63,6 @@ export async function POST(request: Request) {
 
       const pageText = result.text.trim();
 
-      console.log(
-        `Page ${pageNumber}: ${pageText.length} characters`
-      );
 
       // Skip empty pages
       if (!pageText) {
@@ -77,9 +72,6 @@ export async function POST(request: Request) {
       // Create chunks for this page
       const textChunks = createChunks(pageText);
 
-      console.log(
-        `Page ${pageNumber}: ${textChunks.length} chunks`
-      );
 
       // Create embedding for each chunk
       for (let i = 0; i < textChunks.length; i++) {
