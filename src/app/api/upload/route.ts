@@ -44,37 +44,73 @@ export async function POST(request: Request) {
       data: buffer,
     });
 
-    const result = await parser.getText();
+    // Get total number of pages
+    const info = await parser.getInfo();
 
-    await parser.destroy();
+    const totalPages = info.total;
 
-    const text = result.text;
-
-    // Create chunks
-    const textChunks = createChunks(text);
-
-    console.log("Text length:", text.length);
-    console.log("Number of chunks:", textChunks.length);
+    console.log("Total pages:", totalPages);
     console.log("Document ID:", document.id);
 
-    // Generate embeddings and insert chunks
-    for (const chunk of textChunks) {
-      const embedding = await generateEmbedding(chunk);
+    let totalChunks = 0;
+    let idx = 0;
 
-      await db.insert(chunks).values({
-        documentId: document.id,
-        content: chunk,
-        embedding,
+    // Process PDF page by page
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+
+      // Extract only this page
+      const result = await parser.getText({
+        partial: [pageNumber],
       });
+
+      const pageText = result.text.trim();
+
+      console.log(
+        `Page ${pageNumber}: ${pageText.length} characters`
+      );
+
+      // Skip empty pages
+      if (!pageText) {
+        continue;
+      }
+
+      // Create chunks for this page
+      const textChunks = createChunks(pageText);
+
+      console.log(
+        `Page ${pageNumber}: ${textChunks.length} chunks`
+      );
+
+      // Create embedding for each chunk
+      for (let i = 0; i < textChunks.length; i++) {
+        const chunk = textChunks[i];
+
+        const embedding = await generateEmbedding(chunk);
+
+        await db.insert(chunks).values({
+          documentId: document.id,
+          content: chunk,
+          pageNumber: pageNumber,
+          chunkIndex: idx,
+          embedding,
+        });
+        
+        idx++;
+
+        totalChunks++;
+      }
     }
+
+    await parser.destroy();
 
     return Response.json({
       success: true,
       documentId: document.id,
       filename: file.name,
-      textLength: text.length,
-      numberOfChunks: textChunks.length,
+      totalPages,
+      numberOfChunks: totalChunks,
     });
+
   } catch (error) {
     console.error("Upload error:", error);
 

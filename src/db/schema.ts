@@ -32,4 +32,8 @@ export const chunks = pgTable("chunks", {
   embedding: vector("embedding", {
     dimensions: 3072,
   }),
+  chunkIndex: integer("chunk_index").notNull(),
+  createdAt: timestamp("created_at")
+    .defaultNow()
+    .notNull(),
 });
