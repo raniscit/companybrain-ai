@@ -1,21 +1,97 @@
 export const runtime = "nodejs";
 
+import { NextResponse } from "next/server";
+
+import { getCurrentEmployee } from "@/lib/auth/get-current-user";
+import { hasPermission, canAssignDocumentAccess } from "@/lib/auth/authorize";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+
 import { PDFParse } from "pdf-parse";
 import { createChunks } from "../../../lib/chunks";
 import { generateEmbedding } from "@/lib/embedding";
+
 import { db } from "@/db";
 import { documents, chunks } from "@/db/schema";
 
 export async function POST(request: Request) {
   try {
+
+
+    //authentication
+    const user = await getCurrentEmployee();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+        },
+        { status: 401 }
+      );
+    }
+
+
+    //authorisation
+    const allowed = hasPermission(
+      user.accessGroup,
+      PERMISSIONS.UPLOAD_DOCUMENT
+    );
+
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: "You do not have permission to upload documents",
+        },
+        { status: 403 }
+      );
+    }
+
+
+
     const formData = await request.formData();
 
     const file = formData.get("file") as File | null;
+
+    const requestedAccessGroup = formData.get("accessGroup");
 
     if (!file) {
       return Response.json(
         { error: "No file uploaded" },
         { status: 400 }
+      );
+    }
+
+    if (
+      typeof requestedAccessGroup !== "string" ||
+      !requestedAccessGroup
+    ) {
+      return NextResponse.json(
+        {
+          error: "Document access group is required",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+
+    const documentAccessGroup = requestedAccessGroup.toUpperCase();
+
+    // 7. CHECK WHETHER USER CAN ASSIGN THIS GROUP
+    if (
+      !canAssignDocumentAccess(
+        user.accessGroup,
+        documentAccessGroup
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            `You are not authorized to create a ${documentAccessGroup} level document`,
+        },
+        {
+          status: 403,
+        }
       );
     }
 
@@ -26,11 +102,26 @@ export async function POST(request: Request) {
       );
     }
 
+
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        {
+          error: "File size must be less than 10 MB",
+        },
+        { status: 400 }
+      );
+    }
+
+
     // Create document
     const [document] = await db
       .insert(documents)
       .values({
         filename: file.name,
+        accessGroup: documentAccessGroup,
+        uploadedBy: user.id,
       })
       .returning({
         id: documents.id,
@@ -86,7 +177,6 @@ export async function POST(request: Request) {
           chunkIndex: idx,
           embedding,
         });
-        
         idx++;
 
         totalChunks++;
@@ -95,23 +185,28 @@ export async function POST(request: Request) {
 
     await parser.destroy();
 
-    return Response.json({
-      success: true,
-      documentId: document.id,
-      filename: file.name,
-      totalPages,
-      numberOfChunks: totalChunks,
-    });
-
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Document uploaded successfully",
+        documentId: document.id,
+        filename: file.name,
+        accessGroup: documentAccessGroup,
+        uploadedBy: user.id,
+        totalPages: totalPages,
+        numberOfChunks: totalChunks,
+      },
+      { status: 201 }
+    );
   } catch (error) {
-    console.error("Upload error:", error);
+    console.error("Document upload error:", error);
 
-    return Response.json(
+    return NextResponse.json(
       {
         error:
           error instanceof Error
             ? error.message
-            : "Failed to process PDF",
+            : "Failed to process document",
       },
       { status: 500 }
     );

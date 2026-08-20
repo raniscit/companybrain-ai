@@ -5,12 +5,54 @@ import {
   timestamp,
   integer,
   vector,
+  uuid,
+  varchar,
 } from "drizzle-orm/pg-core";
+
+
+export const employees = pgTable("employees", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  employeeId: varchar("employee_id", {
+    length: 50,
+  }).unique().notNull(),
+
+  email: varchar("email", {
+    length: 255,
+  }).unique().notNull(),
+
+  name: varchar("name", {
+    length: 255,
+  }),
+
+  department: varchar("department", {
+    length: 100,
+  }),
+
+  designation: varchar("designation", {
+    length: 100,
+  }),
+
+  accessGroup: varchar("access_group", {
+    length: 50,
+  }).notNull(),
+});
+
 
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
 
   filename: text("filename").notNull(),
+
+  department: varchar("department", { length: 100 }),
+
+  accessGroup: varchar("access_group", { length: 50 })
+    .notNull(),
+
+  uploadedBy: uuid("uploaded_by")
+    .references(() => employees.id, {
+      onDelete: "set null",
+    }),
 
   createdAt: timestamp("created_at")
     .defaultNow()

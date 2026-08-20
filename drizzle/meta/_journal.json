@@ -29,6 +29,13 @@
       "when": 1786900222252,
       "tag": "0003_woozy_fallen_one",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787242666418,
+      "tag": "0004_quick_silver_samurai",
+      "breakpoints": true
     }
   ]
 }
